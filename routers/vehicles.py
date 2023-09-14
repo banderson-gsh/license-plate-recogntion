@@ -18,8 +18,7 @@ async def create_vehicle(vehicle_details: VehicleDetailsCreate, db: Session = De
         if vehicle_details.gps_details is None:
             raise HTTPException(status_code=400, detail="GPS details are not provided!")
 
-        encoded_image_data = vehicle_details.image.split(',')[1]
-        license_number = await send_to_anpr(image_data=encoded_image_data)
+        license_number = await send_to_anpr(image_data=vehicle_details.image)
 
         if license_number is None:
             raise HTTPException(status_code=400, detail="Plate number not retrieved!")
@@ -31,13 +30,13 @@ async def create_vehicle(vehicle_details: VehicleDetailsCreate, db: Session = De
             if not new_vehicle:
                 raise HTTPException(status_code=400, detail="Failed to create vehicle!")
 
-            new_vehicle_details = crud_vehicle.create_vehicle_details(db, details=VehicleDetailsCreate(image=encoded_image_data, gps_details=vehicle_details.gps_details, vehicle_id=new_vehicle.id))            
+            new_vehicle_details = crud_vehicle.create_vehicle_details(db, details=VehicleDetailsCreate(image=vehicle_details.image, gps_details=vehicle_details.gps_details, vehicle_id=new_vehicle.id))            
             if not new_vehicle_details:
                 raise HTTPException(status_code=400, detail="Failed to create vehicle details!")
 
             return new_vehicle
 
-        new_vehicle_details = crud_vehicle.create_vehicle_details(db, details=VehicleDetailsCreate(image=encoded_image_data, gps_details=vehicle_details.gps_details, vehicle_id=db_vehicle.id))
+        new_vehicle_details = crud_vehicle.create_vehicle_details(db, details=VehicleDetailsCreate(image=vehicle_details.image, gps_details=vehicle_details.gps_details, vehicle_id=db_vehicle.id))
 
         if not new_vehicle_details:
             raise HTTPException(status_code=400, detail="Failed to create vehicle details!")
