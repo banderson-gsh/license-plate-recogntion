@@ -8,20 +8,24 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Vehicle management
 class VehicleCreate(BaseModel):
-    plate_number: Optional[str] = None
+    plate_number: str
 
 class VehicleInDB(VehicleCreate):
     id: int
+    plate_number: str
 
 
 # Vehicle details management
 class VehicleDetailsCreate(BaseModel):
     image: str
     gps_details: str
-    vehicle_id: int
+    vehicle_id: Optional [int] = None
 
 class VehicleDetailsInDB(VehicleDetailsCreate):
     id: int
+    image: str
+    gps_details: str
+    vehicle_id: Optional [int]
 
 
 # User management
