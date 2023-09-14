@@ -1,45 +1,51 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import base64
 from crud import vehicle as crud_vehicle
 from core.dependencies import get_db
 from schemas.models import VehicleCreate, VehicleInDB, VehicleDetailsCreate, VehicleDetailsInDB
-from utils.compression import compress_image
 from utils.anpr import send_to_anpr
-
 
 router = APIRouter()
 
 @router.post("/create-vehicle/", response_model=VehicleInDB)
-async def create_vehicle(file: UploadFile = File(...), gps_details: str = None, db: Session = Depends(get_db)):
+async def create_vehicle(vehicle_details: VehicleDetailsCreate, db: Session = Depends(get_db)):
     try:
-        compressed_image = await compress_image(await file.read())
-        plate_number = await send_to_anpr(compressed_image)
-        image_base64 = base64.b64encode(compressed_image).decode()
+        if vehicle_details.image is None:
+            raise HTTPException(status_code=400, detail="Base 64 encoded image not provided!")
 
-        db_vehicle = crud_vehicle.get_vehicle_by_plate_number(db, vehicle_plate_number=plate_number)
+        if vehicle_details.gps_details is None:
+            raise HTTPException(status_code=400, detail="GPS details are not provided!")
 
-        if db_vehicle:
-            vehicle_details_data = VehicleDetailsCreate(image=image_base64, gps_details=gps_details, vehicle_id=db_vehicle.id)
-            new_vehicle_details = crud_vehicle.create_vehicle_details(db, details=vehicle_details_data)
+        encoded_image_data = vehicle_details.image.split(',')[1]
+        license_number = await send_to_anpr(image_data=encoded_image_data)
 
+        if license_number is None:
+            raise HTTPException(status_code=400, detail="Plate number not retrieved!")
+
+        db_vehicle = crud_vehicle.get_vehicle_by_plate_number(db, vehicle_plate_number=license_number)
+
+        if not db_vehicle:
+            new_vehicle = crud_vehicle.create_vehicle(db, vehicle=VehicleCreate(plate_number=license_number))            
+            if not new_vehicle:
+                raise HTTPException(status_code=400, detail="Failed to create vehicle!")
+
+            new_vehicle_details = crud_vehicle.create_vehicle_details(db, details=VehicleDetailsCreate(image=encoded_image_data, gps_details=vehicle_details.gps_details, vehicle_id=new_vehicle.id))            
             if not new_vehicle_details:
                 raise HTTPException(status_code=400, detail="Failed to create vehicle details!")
 
-        else:
-            vehicle_data = VehicleCreate(plate_number=plate_number)
-            new_vehicle = crud_vehicle.create_vehicle(db, vehicle=vehicle_data)
+            return new_vehicle
 
-            if new_vehicle:
-                vehicle_details_data = VehicleDetailsCreate(image=image_base64, gps_details=gps_details, vehicle_id=new_vehicle.id)
-                new_vehicle_details = crud_vehicle.create_vehicle_details(db, details=vehicle_details_data)
+        new_vehicle_details = crud_vehicle.create_vehicle_details(db, details=VehicleDetailsCreate(image=encoded_image_data, gps_details=vehicle_details.gps_details, vehicle_id=db_vehicle.id))
 
-                if not new_vehicle_details:
-                    raise HTTPException(status_code=400, detail="Failed to create vehicle details!")
+        if not new_vehicle_details:
+            raise HTTPException(status_code=400, detail="Failed to create vehicle details!")
 
-            else:
-                raise HTTPException(status_code=400, detail="Failed to create vehicle!")
+        return db_vehicle
+
+    except HTTPException as e:
+        raise e
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
