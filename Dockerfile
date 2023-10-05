@@ -1,8 +1,10 @@
 FROM python:3.9
 
-WORKDIR /license_plate_recognition_app
+WORKDIR /vlpr_app
 
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY . .
+
+# CMD ["uvicorn", "main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
